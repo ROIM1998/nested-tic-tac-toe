@@ -10,7 +10,7 @@ from treelib import Tree, Node
 
 cond_to_chr = {0: ' ', 1: 'O', 2: 'X'}
 role_to_int = {'O': 1, 'X': 2, None: 0}
-meta_game_completed = [False] * 9
+meta_game_completed = [0] * 9
 
 def make_empty_board():
     return np.zeros([9,3,3])
@@ -73,6 +73,13 @@ class Game:
                 "starter": [],
                 "players": [],
             })
+            
+    def check_local_winner(self, player, board):
+        checks = []
+        checks += [all(board[0] == player), all(board[1] == player), all(board[2] == player)]
+        checks += [all(board[:, 0] == player), all(board[:, 1] == player), all(board[:, 2] == player)]
+        checks += [all(board.flatten()[0::4] == player), all(board.flatten()[2:7:2] == player)]
+        return any(checks)
 
     def check_winner(self, player, board):
         meta_checks = []
@@ -88,7 +95,7 @@ class Game:
             if not meta_game_completed[meta_game_won_index]:
                 print("Game %s has been won by player %s" % (meta_game_won_index, self.id_to_name[player]))
                 self.board[meta_game_won_index][:] = player
-                meta_game_completed[meta_game_won_index] = True
+                meta_game_completed[meta_game_won_index] = player
         # Check if there's any board is a tie, which needs to be refreshed by filling 0
         for i in range(9):
             if all(board[i].flatten() != 0) and not meta_game_completed[i]:
@@ -106,17 +113,27 @@ class Game:
         return all(board.flatten() != 0)
 
 
-    def get_winner(self, board):
+    def get_winner(self, board, get_global=True):
         """Determines the winner of the given board.
         Returns 'X', 'O', or None."""
-        if isinstance(board, list):
-            board = np.array([[role_to_int[v] for v in l] for l in board])
-        if self.check_winner(1, board):
-            return 1
-        elif self.check_winner(2, board):
-            return 2
+        if get_global:
+            if isinstance(board, list):
+                board = np.array([[role_to_int[v] for v in l] for l in board])
+            if self.check_winner(1, board):
+                return 1
+            elif self.check_winner(2, board):
+                return 2
+            else:
+                return 0
         else:
-            return 0
+            if isinstance(board, list):
+                board = np.array([[role_to_int[v] for v in l] for l in board])
+            if self.check_local_winner(1, board):
+                return 1
+            elif self.check_local_winner(2, board):
+                return 2
+            else:
+                return 0
 
 
     def other_player(self, player):
@@ -268,10 +285,10 @@ class HumanPlayer(Player):
             row, col = position.split()
             if row not in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']:
                 print("Wrong input! The index of rows should be 'a' to 'i'")
-                return None, None
+                return None, None, None
             if col not in ['0', '1', '2', '3', '4', '5', '6', '7', '8']:
                 print("Wrong input! The index of columns should be 0-8")
-                return None, None
+                return None, None, None
             row = ord(row) - ord('a')
             col = int(col)
             meta_block_row, meta_block_col = row // 3, col // 3
@@ -280,7 +297,7 @@ class HumanPlayer(Player):
             return meta_block_id, inner_block_row, inner_block_col
         except Exception as e:
             print("Invalid input position command! Try again!")
-            return None, None
+            return None, None, None
 
 
 class RandomBot(Player):
@@ -308,64 +325,81 @@ class MinimaxBot(Player):
         self.name = "minimax_bot"
         
     def get_move(self, game: Game):
-        if (game.board == 0).all():
-            return 1, 1
-        status_stack = ["root"]
-        search_tree = Tree()
-        search_tree.create_node("root", "root", data = {
-            'board': np.copy(game.board),
-            'turn': 'max',
-            'move': None,
-            'score': None,
-            'depth': 0,
-        })
-        while len(status_stack) != 0:
-            status_id = status_stack.pop()
-            status_node = search_tree.get_node(status_id)
-            status_board = status_node.data['board']
-            availables = self.get_available_moves(status_board)
-            for i, available in enumerate(availables):
-                new_board = np.copy(status_board)
-                new_board[available[0]][available[1]] = self.player_id if status_node.data['turn'] == 'max' else game.other_player(self).player_id
-                new_board_data = {
-                    'board': new_board,
-                    'turn': 'min' if status_node.data['turn'] == 'max' else 'max',
-                    'move': available,
-                    'depth': status_node.data['depth'] + 1,
-                }
-                winner = game.get_winner(new_board)
-                this_id = status_id + '-' + str(i)
-                if winner != 0:
-                    new_board_data['score'] = 10 - new_board_data['depth'] if winner == self.player_id else new_board_data['depth'] - 10
-                elif game.check_draw(new_board):
-                    new_board_data['score'] = 0
-                else:
-                    new_board_data['score'] = None
-                    status_stack.append(this_id)
-                search_tree.create_node(
-                    this_id,
-                    this_id,
-                    parent=status_id,
-                    data=new_board_data
-                )
-                
-        all_nodes = search_tree.all_nodes()
-        all_nodes.reverse()
-        for node in all_nodes:
-            assert isinstance(node, Node)
-            if node.data['score'] is not None:
-                continue
+        # First, decide which block to play (0-8)
+        meta_move = minimax_algo(self, game, np.array(meta_game_completed).reshape(3, 3))
+        # Then, decide which position to play (0-2, 0-2)
+        meta_move_id = meta_move[0] * 3 + meta_move[1]
+        inner_move = minimax_algo(self, game, game.board[meta_move_id])
+        print("Move: ", meta_move_id, inner_move[0], inner_move[1])
+        return meta_move_id, inner_move[0], inner_move[1]
+
+    def get_available_moves(self, board: np.ndarray, get_global=True):
+        if get_global:
+            return super().get_available_moves(board)
+        indices = np.where(board == 0)
+        available = [(i, j) for i, j in zip(indices[0], indices[1])]
+        return available
+
+
+def minimax_algo(bot: MinimaxBot, game: Game, board):
+    if (board == 0).all():
+        return 1, 1
+    status_stack = ["root"]
+    search_tree = Tree()
+    search_tree.create_node("root", "root", data = {
+        'board': np.copy(board),
+        'turn': 'max',
+        'move': None,
+        'score': None,
+        'depth': 0,
+    })
+    while len(status_stack) != 0:
+        status_id = status_stack.pop()
+        status_node = search_tree.get_node(status_id)
+        status_board = status_node.data['board']
+        availables = bot.get_available_moves(status_board, get_global=False)
+        for i, available in enumerate(availables):
+            new_board = np.copy(status_board)
+            new_board[available[0]][available[1]] = bot.player_id if status_node.data['turn'] == 'max' else game.other_player(bot).player_id
+            new_board_data = {
+                'board': new_board,
+                'turn': 'min' if status_node.data['turn'] == 'max' else 'max',
+                'move': available,
+                'depth': status_node.data['depth'] + 1,
+            }
+            winner = game.get_winner(new_board, get_global=False)
+            this_id = status_id + '-' + str(i)
+            if winner != 0:
+                new_board_data['score'] = 10 - new_board_data['depth'] if winner == bot.player_id else new_board_data['depth'] - 10
+            elif game.check_draw(new_board):
+                new_board_data['score'] = 0
             else:
-                children_nodes = search_tree.children(node.identifier)
-                node.data['score'] = max([child.data['score'] for child in children_nodes]) if node.data['turn'] == 'max' else min([child.data['score'] for child in children_nodes])
-        
-        move = None
-        max_score = -100
-        for children in search_tree.children('root'):
-            if children.data['score'] > max_score:
-                max_score = children.data['score']
-                move = children.data['move']
-        return move
+                new_board_data['score'] = None
+                status_stack.append(this_id)
+            search_tree.create_node(
+                this_id,
+                this_id,
+                parent=status_id,
+                data=new_board_data
+            )
+            
+    all_nodes = search_tree.all_nodes()
+    all_nodes.reverse()
+    for node in all_nodes:
+        assert isinstance(node, Node)
+        if node.data['score'] is not None:
+            continue
+        else:
+            children_nodes = search_tree.children(node.identifier)
+            node.data['score'] = max([child.data['score'] for child in children_nodes]) if node.data['turn'] == 'max' else min([child.data['score'] for child in children_nodes])
+    
+    move = None
+    max_score = -100
+    for children in search_tree.children('root'):
+        if children.data['score'] > max_score:
+            max_score = children.data['score']
+            move = children.data['move']
+    return move
                 
 name2class = {
     "human": HumanPlayer,
