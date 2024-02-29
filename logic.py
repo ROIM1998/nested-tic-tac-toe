@@ -86,9 +86,14 @@ class Game:
         meta_game_won = [i for i, v in enumerate(meta_checks) if v]
         for meta_game_won_index in meta_game_won:
             if not meta_game_completed[meta_game_won_index]:
-                print("Meta game %s has been won by player %s" % (meta_game_won_index, self.id_to_name[player]))
+                print("Game %s has been won by player %s" % (meta_game_won_index, self.id_to_name[player]))
                 self.board[meta_game_won_index][:] = player
                 meta_game_completed[meta_game_won_index] = True
+        # Check if there's any board is a tie, which needs to be refreshed by filling 0
+        for i in range(9):
+            if all(board[i].flatten() != 0) and not meta_game_completed[i]:
+                self.board[i][:] = 0
+                print("Game %s has been drawed. Refresh the board!" % i)
         meta_checks = np.array(meta_checks).reshape(3, 3)
         meta_check_results = []
         meta_check_results += [all(meta_checks[0]), all(meta_checks[1]), all(meta_checks[2])]
