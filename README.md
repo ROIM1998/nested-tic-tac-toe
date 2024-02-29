@@ -14,10 +14,10 @@ pip install -r requirements.txt
 
 ### Running
 
-Running the autorun bash script to create csv files as databases
+Executing the cli.py file to start the game:
 
 ```
-bash autorun.bash
+python cli.py
 ```
 
 Then open and run the codes in plot.ipynb to see the plots
