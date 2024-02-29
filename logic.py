@@ -74,11 +74,20 @@ class Game:
             })
 
     def check_winner(self, player, board):
-        checks = []
-        checks += [all(board[0] == player), all(board[1] == player), all(board[2] == player)]
-        checks += [all(board[:, 0] == player), all(board[:, 1] == player), all(board[:, 2] == player)]
-        checks += [all(board.flatten()[0::4] == player), all(board.flatten()[2:7:2] == player)]
-        return any(checks)
+        meta_checks = []
+        for i in range(9):
+            checks = []
+            checks += [all(board[i][0] == player), all(board[i][1] == player), all(board[i][2] == player)]
+            checks += [all(board[i][:, 0] == player), all(board[i][:, 1] == player), all(board[i][:, 2] == player)]
+            checks += [all(board[i].flatten()[0::4] == player), all(board[i].flatten()[2:7:2] == player)]
+            meta_checks.append(any(checks))
+        # check the meta board
+        meta_checks = np.array(meta_checks).reshape(3, 3)
+        meta_check_results = []
+        meta_check_results += [all(meta_checks[0]), all(meta_checks[1]), all(meta_checks[2])]
+        meta_check_results += [all(meta_checks[:, 0]), all(meta_checks[:, 1]), all(meta_checks[:, 2])]
+        meta_check_results += [all(meta_checks.flatten()[0::4]), all(meta_checks.flatten()[2:7:2])]
+        return any(meta_check_results)
 
 
     def check_draw(self, board):
@@ -104,8 +113,8 @@ class Game:
 
 
     def move(self, player, position):
-        if position[0] is not None and position[1] is not None and position in player.get_available_moves(self.board):
-            self.board[position[0]][position[1]] = player.player_id
+        if position[1] is not None and position[2] is not None and position in player.get_available_moves(self.board):
+            self.board[position[0]][position[1]][position[2]] = player.player_id
             return True
         else:
             print("The place has already been taken!")
@@ -154,9 +163,9 @@ class Game:
             # TODO: Show the board to the user.
             print(self)
             # TODO: Input a move from the player.
-            row, col = self.player_now.get_move(self)
+            meta_block_id, row, col = self.player_now.get_move(self)
             # TODO: Update the board.
-            success = self.move(self.player_now, (row, col))
+            success = self.move(self.player_now, (meta_block_id, row, col))
             # TODO: Update who's turn it is.
             if success:
                 self.player_now.num_moves += 1
@@ -226,7 +235,7 @@ class Player:
     
     def get_available_moves(self, board: np.ndarray):
         indices = np.where(board == 0)
-        available = [(i, j) for i, j in zip(indices[0], indices[1])]
+        available = [(i, j, k) for i, j, k in zip(indices[0], indices[1], indices[2])]
         return available
 
     def get_move(self):
@@ -253,7 +262,10 @@ class HumanPlayer(Player):
                 return None, None
             row = ord(row) - ord('a')
             col = int(col)
-            return row, col
+            meta_block_row, meta_block_col = row // 3, col // 3
+            meta_block_id = meta_block_row * 3 + meta_block_col
+            inner_block_row, inner_block_col = row % 3, col % 3
+            return meta_block_id, inner_block_row, inner_block_col
         except Exception as e:
             print("Invalid input position command! Try again!")
             return None, None
