@@ -10,6 +10,7 @@ from treelib import Tree, Node
 
 cond_to_chr = {0: ' ', 1: 'O', 2: 'X'}
 role_to_int = {'O': 1, 'X': 2, None: 0}
+meta_game_completed = [False] * 9
 
 def make_empty_board():
     return np.zeros([9,3,3])
@@ -82,6 +83,12 @@ class Game:
             checks += [all(board[i].flatten()[0::4] == player), all(board[i].flatten()[2:7:2] == player)]
             meta_checks.append(any(checks))
         # check the meta board
+        meta_game_won = [i for i, v in enumerate(meta_checks) if v]
+        for meta_game_won_index in meta_game_won:
+            if not meta_game_completed[meta_game_won_index]:
+                print("Meta game %s has been won by player %s" % (meta_game_won_index, self.id_to_name[player]))
+                self.board[meta_game_won_index][:] = player
+                meta_game_completed[meta_game_won_index] = True
         meta_checks = np.array(meta_checks).reshape(3, 3)
         meta_check_results = []
         meta_check_results += [all(meta_checks[0]), all(meta_checks[1]), all(meta_checks[2])]
