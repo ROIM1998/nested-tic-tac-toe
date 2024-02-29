@@ -59,20 +59,7 @@ class Game:
             self.player_one.player_id: self.player_one.name,
             self.player_two.player_id: self.player_two.name,
         }
-        self.savegame: pd.DataFrame = self.read_savegame("savegame.csv")
         print(self.id_to_name)
-
-    def read_savegame(self, filename):
-        if os.path.exists(filename):
-            return pd.read_csv(filename)
-        else:
-            return pd.DataFrame({
-                "game_id": [],
-                "winner": [],
-                "rounds": [],
-                "starter": [],
-                "players": [],
-            })
             
     def check_local_winner(self, player, board):
         checks = []
@@ -171,18 +158,6 @@ class Game:
             returned_str += row_blocks
         return returned_str
     
-    
-    def add_savegame(self, winner, rounds, is_draw):
-        game_id = max(self.savegame.game_id) + 1 if len(self.savegame) > 0 else 0
-        self.savegame = self.savegame.append({
-            "game_id": game_id,
-            "winner": winner,
-            "rounds": rounds,
-            "is_draw": is_draw,
-            "starter": self.starter,
-            "players": [self.player_one.name, self.player_two.name],
-        }, ignore_index=True)
-    
     def start(self):
         winner = None
         rounds = 0
@@ -206,55 +181,10 @@ class Game:
                 winner = checked
                 print(self)
                 print("Player %s has won!!" % self.id_to_name[checked])
-                self.add_savegame(self.id_to_name[checked], rounds, False)
             if self.check_draw(self.board):
                 print(self)
                 print("Draw!")
-                self.add_savegame(None, rounds, True)
                 break
-        self.save_game("savegame.csv")
-        self.update_statistics(winner)
-    
-    def save_game(self, filename):
-        self.savegame.to_csv(filename, index=False)
-        
-    def update_statistics(self, winner, filename="statistics.csv"):
-        if os.path.exists(filename):
-            df = pd.read_csv(filename, index_col=0)
-        else:
-            df = pd.DataFrame({
-                "player_name": [],
-                "wins": [],
-                "played": [],
-                "drawed": [],
-                "thinking_time": [],
-                "moves_take": [],
-            }).set_index('player_name')
-        winner_name = self.id_to_name[winner] if winner is not None else None
-        for player_name in self.id_to_name.values():
-            if player_name in df.index.tolist():
-                df.loc[player_name, 'played'] += 1
-                df.loc[player_name, 'thinking_time'] += self.name2player[player_name].time_takes
-                df.loc[player_name, 'moves_take'] += self.name2player[player_name].num_moves
-            else:
-                df = df.append(pd.DataFrame({
-                    "wins": [0],
-                    "played": [1],
-                    "drawed": [0],
-                    "thinking_time": [self.name2player[player_name].time_takes],
-                    "moves_take": [self.name2player[player_name].num_moves],
-                }, index=[player_name]))
-        if winner_name is not None:
-            df.loc[winner_name, 'wins'] += 1
-        else:
-            for player_name in self.id_to_name.values():
-                df.loc[player_name, 'drawed'] += 1
-        df.to_csv(filename)
-        df.sort_values(by=['wins', 'drawed'], ascending=False, inplace=True)
-        print("Leaderboard:")
-        print(df)
-    
-
 
 class Player:
     def __init__(self, player_id):
